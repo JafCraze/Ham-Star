@@ -1,0 +1,221 @@
+[gd_scene load_steps=14 format=2]
+
+[ext_resource path="res://Star.png" type="Texture" id=1]
+[ext_resource path="res://AlleyGarden-2Ogdw.ttf" type="DynamicFontData" id=2]
+[ext_resource path="res://Pig.wav" type="AudioStream" id=3]
+[ext_resource path="res://Dead.wav" type="AudioStream" id=4]
+[ext_resource path="res://BGM.wav" type="AudioStream" id=5]
+
+[sub_resource type="GDScript" id=1]
+script/source = "extends Node2D
+
+onready var Enemy = preload(\"res://Enemy.tscn\")
+onready var Star = $Star
+onready var StarT = $StarTween
+const speed = 1280.0
+var Playing = true
+var score = 0
+
+func _ready():
+	randomize()
+	spawn_enemy()
+
+func spawn_enemy():
+	var pos = Vector2(64 * (randi() % 14 + 1), 64 * (randi() % 9 + 1))
+	while pos.distance_to(Star.global_position) < 200:
+		pos = Vector2(64 * (randi() % 14 + 1), 64 * (randi() % 9 + 1))
+	
+	var enemy = Enemy.instance()
+	enemy.global_position = pos
+	enemy.Dir = [Vector2.RIGHT, Vector2.LEFT, Vector2.UP, Vector2.DOWN][randi() % 4]
+	add_child(enemy)
+
+func _input(event):
+	if event.is_action_pressed(\"restart\"):
+		get_tree().reload_current_scene()
+	
+	if !Playing:
+		return
+	
+	if event is InputEventMouseButton and event.is_pressed():
+		move_star()
+
+func move_star():
+	if StarT.is_active():
+		return
+	
+	var dis = Star.global_position.distance_to(get_global_mouse_position())
+	var angle = Star.global_position.direction_to(get_global_mouse_position())
+	StarT.interpolate_property(Star, \"global_position\",
+	Star.global_position, get_global_mouse_position(), dis / speed, Tween.TRANS_LINEAR, Tween.EASE_IN)
+	Star.speed_up(angle)
+	StarT.start()
+
+func _on_StarTween_tween_completed(_object, _key):
+	Star.speed_up()
+
+func _on_Star_area_entered(area):
+	if !Playing:
+		return
+	
+	if area.Ham:
+		$Pig.play()
+		score += 1
+		$CanvasLayer/Label.text = str(score)
+		area.to_hamster()
+		spawn_enemy()
+	else:
+		$Dead.play()
+		$CanvasLayer/Label.text = str(score) + \"\\nRight-Click to Restart\"
+		Playing = false
+		StarT.stop_all()
+		Star.explode()
+"
+
+[sub_resource type="RectangleShape2D" id=2]
+extents = Vector2( 480, 32 )
+
+[sub_resource type="RectangleShape2D" id=3]
+extents = Vector2( 32, 384 )
+
+[sub_resource type="GDScript" id=4]
+script/source = "extends Area2D
+
+var Rot_Speed = 200
+
+func _process(delta):
+	$Sprite.rotation_degrees += Rot_Speed * delta
+	if $Sprite.rotation_degrees > 360:
+		$Sprite.rotation_degrees -= 360
+
+func speed_up(dir = Vector2.ZERO):
+	print(dir)
+	if dir == Vector2.ZERO:
+		Rot_Speed = 200
+		$Trail.emitting = false
+	else:
+		Rot_Speed = 600
+		$Trail.emitting = true
+		$Trail.direction = -dir
+
+func explode():
+	$Sprite.texture = null
+	$Trail.emitting = false
+	$Explosion.emitting = true
+"
+
+[sub_resource type="RectangleShape2D" id=5]
+extents = Vector2( 32, 32 )
+
+[sub_resource type="Curve" id=6]
+_data = [ Vector2( 0, 1 ), 0.0, 0.0, 0, 0, Vector2( 1, 0 ), 0.0, 0.0, 0, 0 ]
+
+[sub_resource type="Curve" id=7]
+_data = [ Vector2( 0.00574712, 0.227273 ), 0.0, 0.0, 0, 0, Vector2( 0.522988, 1 ), 0.0, 0.0, 0, 0, Vector2( 1, 0 ), 0.0, 0.0, 0, 0 ]
+
+[sub_resource type="DynamicFont" id=8]
+size = 32
+font_data = ExtResource( 2 )
+
+[node name="Level" type="Node2D"]
+script = SubResource( 1 )
+
+[node name="StarTween" type="Tween" parent="."]
+
+[node name="Walls" type="Node2D" parent="."]
+
+[node name="Wall1" type="StaticBody2D" parent="Walls"]
+position = Vector2( 480, -32 )
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Walls/Wall1"]
+shape = SubResource( 2 )
+
+[node name="Wall2" type="StaticBody2D" parent="Walls"]
+position = Vector2( 480, 672 )
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Walls/Wall2"]
+shape = SubResource( 2 )
+
+[node name="Wall3" type="StaticBody2D" parent="Walls"]
+position = Vector2( -32, 320 )
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Walls/Wall3"]
+shape = SubResource( 3 )
+
+[node name="Wall4" type="StaticBody2D" parent="Walls"]
+position = Vector2( 992, 320 )
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Walls/Wall4"]
+shape = SubResource( 3 )
+
+[node name="Star" type="Area2D" parent="."]
+position = Vector2( 480, 320 )
+script = SubResource( 4 )
+__meta__ = {
+"_edit_group_": true
+}
+
+[node name="Sprite" type="Sprite" parent="Star"]
+texture = ExtResource( 1 )
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Star"]
+shape = SubResource( 5 )
+
+[node name="Trail" type="CPUParticles2D" parent="Star"]
+emitting = false
+amount = 20
+lifetime = 2.0
+speed_scale = 5.0
+texture = ExtResource( 1 )
+direction = Vector2( 0.5, 0.5 )
+spread = 15.0
+gravity = Vector2( 0, 0 )
+initial_velocity = 100.0
+angular_velocity = 10.0
+scale_amount = 0.5
+scale_amount_random = 0.1
+scale_amount_curve = SubResource( 6 )
+
+[node name="Explosion" type="CPUParticles2D" parent="Star"]
+emitting = false
+amount = 20
+lifetime = 2.0
+one_shot = true
+speed_scale = 2.0
+texture = ExtResource( 1 )
+emission_shape = 1
+emission_sphere_radius = 50.0
+direction = Vector2( 0, 0 )
+spread = 0.0
+gravity = Vector2( 0, 10 )
+initial_velocity = 10.0
+angle_random = 1.0
+scale_amount = 0.5
+scale_amount_curve = SubResource( 7 )
+
+[node name="CanvasLayer" type="CanvasLayer" parent="."]
+
+[node name="Label" type="Label" parent="CanvasLayer"]
+anchor_right = 1.0
+margin_bottom = 17.0
+custom_fonts/font = SubResource( 8 )
+text = "Welcome to Ham-Star"
+align = 1
+__meta__ = {
+"_edit_use_anchors_": false
+}
+
+[node name="Pig" type="AudioStreamPlayer" parent="."]
+stream = ExtResource( 3 )
+volume_db = -40.0
+
+[node name="Dead" type="AudioStreamPlayer" parent="."]
+stream = ExtResource( 4 )
+volume_db = -20.0
+
+[node name="BGM" type="AudioStreamPlayer" parent="."]
+stream = ExtResource( 5 )
+volume_db = -30.0
+autoplay = true
+[connection signal="tween_completed" from="StarTween" to="." method="_on_StarTween_tween_completed"]
+[connection signal="area_entered" from="Star" to="." method="_on_Star_area_entered"]
